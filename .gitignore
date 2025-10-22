@@ -1,0 +1,6 @@
+calsync
+*.json
+*.bak
+*.prof
+keys
+events.cal
