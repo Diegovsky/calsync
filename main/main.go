@@ -1,14 +1,13 @@
 package main
 
 import (
+	. "calsync"
 	"context"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"sync"
-
-	. "calsync"
 
 	"google.golang.org/api/calendar/v3"
 )
@@ -106,9 +105,7 @@ func main() {
 		ids[event.Id] = event
 		lock.Unlock()
 	}
-	for i := range events {
-		ev := &events[i]
-		// say("Got event %#v", ev)
+	for ev := range events.IterEvents() {
 		if ev.Id == "" {
 			result := srv.Events.Insert(calendarId, &calendar.Event{
 				Summary: ev.Title,

@@ -1,27 +1,62 @@
 package calsync
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
+func (self DocumentItem) Format(f fmt.State, verb rune) {
+	spew.Fdump(f, self)
+}
+
 func assertEq(a any, b any, format string, t *testing.T) {
-	if a != b {
+	if !reflect.DeepEqual(a, b) {
 		t.Errorf(format, a, b)
+		panic("cringe")
+	}
+}
+func expectParse(input string, expectedEvents []Event, t *testing.T) {
+	expectParseDocument(input, makeDocument(expectedEvents), true, t)
+}
+
+func expectParseItems(input string, items []DocumentItem, t *testing.T) {
+	expectParseDocument(input, Document{Items: items}, false, t)
+}
+
+func expectParseDocument(input string, expected Document, ignoreComments bool, t *testing.T) {
+	gotten := Parse(input)
+
+	j := 0
+	for i := range gotten.Items {
+		gotten := gotten.Items[i]
+		expected := expected.Items[j]
+
+		if ignoreComments {
+			gotten.Comment = ""
+			expected.Comment = ""
+
+			if gotten.Event == nil {
+				continue
+			}
+		}
+
+		assertEq(gotten, expected, "Expected:\n%#v\nGot:\n\n%#v", t)
+		j += 1
 	}
 }
 
-func expectParse(input string, expectedEvents []Event, t *testing.T) {
-	events := Parse(input)
-	assertEq(len(expectedEvents), len(events), "Expected '%d' events, got '%d'", t)
-	for i := range events {
-		expected := expectedEvents[i]
-		event := events[i]
-		assertEq(expected, event, "Expected\n'%#v'\ngot\n'%#v'", t)
+func makeDocument(events []Event) (es Document) {
+	for _, e := range events {
+		es.Items = append(es.Items, DocumentItem{Event: &e, Tag: e.Tag})
 	}
+	return
 }
 
 func expectReparse(events []Event, t *testing.T) {
-	gened := EventsToDSL(events)
+	gened := makeDocument(events).ToDSL()
 	expectParse(gened, events, t)
 	if t.Failed() {
 		t.Errorf("Generated string:\n%s\n\n", gened)
@@ -200,6 +235,64 @@ func TestReparseWithId(t *testing.T) {
 			When: Date{
 				Day:   11,
 				Month: 12,
+			},
+		},
+	}, t)
+}
+
+func TestWithInlineComments(t *testing.T) {
+	expectParseItems(`
+			10/12 - Uncommentated event
+			10/13 - Commentated event # Important
+		`, []DocumentItem{
+		{
+			Event: &Event{
+				When: Date{
+					Day:   10,
+					Month: 12,
+				},
+				Title: "Uncommentated event",
+			},
+			Comment: "",
+		},
+		{
+			Event: &Event{
+				When: Date{
+					Day:   10,
+					Month: 13,
+				},
+				Title: "Commentated event",
+			},
+			Comment: " Important",
+		},
+	}, t)
+}
+
+func TestWithComments(t *testing.T) {
+	expectParseItems(`
+			10/12 - Uncommentated event
+			# comment
+ 			10/13 - Commentated event
+		`, []DocumentItem{
+		{
+			Event: &Event{
+				When: Date{
+					Day:   10,
+					Month: 12,
+				},
+				Title: "Uncommentated event",
+			},
+		},
+		{
+			Comment: " comment",
+		},
+		{
+			Event: &Event{
+				When: Date{
+					Day:   10,
+					Month: 13,
+				},
+				Title: "Commentated event",
 			},
 		},
 	}, t)
