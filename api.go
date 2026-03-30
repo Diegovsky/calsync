@@ -2,6 +2,7 @@ package calsync
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -69,12 +70,18 @@ func saveToken(path string, token *oauth2.Token) {
 
 func simpleServer(addr string) string {
 	re := regexp.MustCompile(`(:[\d]+)`)
-	port := re.FindStringSubmatch(addr)[0]
+	matches := re.FindStringSubmatch(addr)
+	if len(matches) == 0 {
+		log.Fatalln("Missing port in address!")
+	}
+	port := matches[0]
+
 	srv := &http.Server{Addr: port}
 	var token string
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		token = q.Get("code")
+		fmt.Fprintf(w, "Calsync is now setup! You can close this tab now.")
 		go func() {
 			srv.Shutdown(context.Background())
 		}()
@@ -86,14 +93,12 @@ func simpleServer(addr string) string {
 	return token
 }
 
-func GetServer(ctx context.Context) *calendar.Service {
-	b, err := os.ReadFile("keys.json")
-	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
-	}
+//go:embed keys.json
+var SECRET []byte
 
+func GetServer(ctx context.Context) *calendar.Service {
 	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, calendar.CalendarScope)
+	config, err := google.ConfigFromJSON(SECRET, calendar.CalendarScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
